@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0">
+    <title>TradingView Chart</title>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.development.js"></script>
+    <style>
+        /* CSS from the JSFiddle */
+        .switcher {
+            display: flex;
+            align-items: center;
+            height: 30px;
+            margin-top: 8px;
+            color: #2196F3;
+        }
+
+        .switcher-item {
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            padding: 6px 8px;
+            font-size: 14px;
+            color: #262b3e;
+            background-color: transparent;
+            margin-right: 8px;
+            border: none;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .switcher-item:hover {
+            background-color: #f2f3f5;
+        }
+
+        .switcher-active-item {
+            text-decoration: none;
+            cursor: default;
+            color: #262b3e;
+        }
+
+        .switcher-active-item,
+        .switcher-active-item:hover {
+            background-color: #e1eff9;
+        }
+
+        /* Your existing CSS */
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+        }
+
+        #chart {
+            width: 90%;
+            height: 600px;
+            margin: 50px auto;
+            padding: 15px;
+            background-color: #fff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* New CSS */
+        .legend {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 10px;
+            margin-right: 5px;
+        }
+
+        .zoom-buttons {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .zoom-button {
+            padding: 5px 10px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .zoom-button:hover {
+            background-color: #1976D2;
+        }
+        /* Toggle Button CSS */
+        .theme-toggle {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .toggle-button {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .toggle-button:hover {
+            background-color: #1976D2;
+        }
+    
+    </style>
+</head>
+
+<body>
+
+    <div id="chart"></div>
+
+    <!-- Legend -->
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgba(32, 30, 150, 1);"></div>
+            Actual Data
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: rgba(200, 10, 150, 1);"></div>
+            Predicted Data
+        </div>
+    </div>
+
+    <!-- Zoom Buttons -->
+    <div class="zoom-buttons">
+        <button class="zoom-button" onclick="zoom(1.5)">Zoom In</button>
+        <button class="zoom-button" onclick="zoom(0.75)">Zoom Out</button>
+    </div>
+
+    <!-- Theme Toggle Button -->
+    <div class="theme-toggle">
+        <button class="toggle-button" onclick="toggleTheme()">Switch to Light Theme</button>
+    </div>
+
+<script>
+    var chart = LightweightCharts.createChart(document.getElementById('chart'), {
+        width: document.body.clientWidth * 0.9,
+        height: 600,
+        layout: {
+            backgroundColor: '#2B2B43',
+            textColor: '#D9D9D9',
+        },
+        grid: {
+            vertLines: {
+                color: '#363C4E',
+            },
+            horzLines: {
+                color: '#363C4E',
+            },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        rightPriceScale: {
+            borderColor: '#D9D9D9',
+        },
+        timeScale: {
+            borderColor: '#D9D9D9',
+            timeVisible: false,
+            secondsVisible: false,
+            timeFormatter: function (timestamp) {
+                const date = new Date(timestamp * 1000); // Convert UNIX timestamp to JS Date
+                console.log("Original Timestamp:", timestamp);
+                console.log("Formatted Date:", `${date.getDate()} ${date.toLocaleString('en-US', { month: 'short' })} ${date.getFullYear()}`);
+                return `${date.getDate()} ${date.toLocaleString('en-US', { month: 'short' })} ${date.getFullYear()}`;
+            },
+        },
+    });
+
+    var areaSeries = chart.addAreaSeries({
+        topColor: 'rgba(32, 30, 150, 0.56)',
+        bottomColor: 'rgba(32, 30, 150, 0.08)',
+        lineColor: 'rgba(32, 30, 150, 1)',
+        lineWidth: 3,
+    });
+
+    var predictionSeries = chart.addAreaSeries({
+        topColor: 'rgba(200, 10, 150, 0.56)',
+        bottomColor: 'rgba(200, 10, 150, 0.08)',
+        lineColor: 'rgba(200, 10, 150, 1)',
+        lineWidth: 3,
+    });
+
+        var darkTheme = {
+            chart: {
+                layout: {
+                    background: {
+                        type: 'solid',
+                        color: '#000',
+                    },
+                    textColor: '#D9D9D9',
+                },
+                watermark: {
+                    color: 'rgba(0, 0, 0, 0)',
+                },
+                crosshair: {
+                    color: '#758696',
+                },
+                grid: {
+                    vertLines: {
+                        visible: false,
+                    },
+                    horzLines: {
+                        color: '#201e9680',
+                    },
+                },
+            },
+            series: {
+                topColor: 'rgba(32, 30, 150, 0.56)',
+                bottomColor: 'rgba(32, 30, 150, 0.2)',
+                lineColor: 'rgba(32, 30, 150, 1)',
+            },
+        };
+
+        const lightTheme = {
+            chart: {
+                layout: {
+                    background: {
+                        type: 'solid',
+                        color: '#FFFFFF',
+                    },
+                    textColor: '#191919',
+                },
+                watermark: {
+                    color: 'rgba(0, 0, 0, 0)',
+                },
+                grid: {
+                    vertLines: {
+                        visible: false,
+                    },
+                    horzLines: {
+                        color: '#f0f3fa',
+                    },
+                },
+            },
+            series: {
+                topColor: 'rgba(33, 150, 243, 0.56)',
+                bottomColor: 'rgba(33, 150, 243, 0.04)',
+                lineColor: 'rgba(33, 150, 243, 1)',
+            },
+        };
+    
+        var themesData = {
+        Dark: darkTheme,
+        Light: lightTheme,
+    };
+
+    var currentTheme = 'Light';
+
+    function toggleTheme() {
+        if (currentTheme === 'Dark') {
+            syncToTheme('Light');
+            currentTheme = 'Light';
+            document.querySelector('.toggle-button').innerText = 'Switch to Dark Theme';
+        } else {
+            syncToTheme('Dark');
+            currentTheme = 'Dark';
+            document.querySelector('.toggle-button').innerText = 'Switch to Light Theme';
+        }
+    }
+
+    function syncToTheme(theme) {
+        chart.applyOptions(themesData[theme].chart);
+        areaSeries.applyOptions(themesData[theme].series);
+    }
+
+    fetch('/get_data')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        const actualData = data.actual_data.dates.map((date, idx) => ({
+            time: new Date(date).getTime() / 1000, // Convert to UNIX timestamp
+            value: data.actual_data.values[idx]
+        }));
+
+        const predictedData = data.predicted_data.dates.map((date, idx) => ({
+            time: new Date(date).getTime() / 1000, // Convert to UNIX timestamp
+            value: data.predicted_data.values[idx]
+        }));
+
+        const lastActualDate = actualData[actualData.length - 1].time;
+        const firstPredictedDate = predictedData[0].time;
+
+        // Add the debugging statements here
+        console.log("Last Actual Date:", new Date(lastActualDate * 1000));
+        console.log("First Predicted Date:", new Date(firstPredictedDate * 1000));
+
+        // Check if there's a one-day gap
+        if ((firstPredictedDate - lastActualDate) > 86400) { // 86400 seconds = 1 day
+            console.log("Adjusting predicted data start time to close the gap."); // This line was added earlier
+            predictedData[0].time = lastActualDate + 86400;
+        }
+
+        // Set the actual data to the area series
+        areaSeries.setData(actualData);
+
+        // Set the predicted data to the prediction series
+        predictionSeries.setData(predictedData);
+            
+        // Set the initial theme to Dark
+        syncToTheme('Dark');
+    })
+    .catch(error => {
+        console.error('There was a problem with the fetch operation:', error.message);
+    });
+    // Zoom function
+    function zoom(factor) {
+        const timeScale = chart.timeScale();
+        const visibleRange = timeScale.getVisibleRange();
+
+        if (!visibleRange) return; // Exit if no visible range is set
+
+        const newRangeDuration = (visibleRange.to - visibleRange.from) / factor;
+        const center = (visibleRange.to + visibleRange.from) / 2;
+
+        const newFrom = center - newRangeDuration / 2;
+        const newTo = center + newRangeDuration / 2;
+
+        timeScale.setVisibleRange({ from: newFrom, to: newTo });
+    }
+
+</script>
