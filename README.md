@@ -67,8 +67,4 @@ To run tests, use:
 python3 -m pytest tests
 ```
 
-To run tests using docker, use:
-```shell
-docker-compose up tests
-```
 # markovMaker
