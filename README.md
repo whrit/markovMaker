@@ -1,10 +1,4 @@
-# Stock Market prediction using Hidden Markov Models
-This repo contains all code related to my work using Hidden Markov Models to predict stock market prices. This
-initially started as academic work, for my masters dissertation, but has since been a project that I have continued to work on 
-post graduation. At present, the program must be called from a terminal/ command line, but there is
-an aim to extend it to an interactive site in future, potentially via Django.
-
-## Motivation
+## Abstract
 Hidden Markov Models are an incredibly interesting type of stochastic process that are under utilised in the
 Machine Learning world. They are particularly useful for analysing time series. This, combined with their ability to 
 convert the observable outputs that are emitted by real-world processes into predictable and efficient models makes
@@ -15,54 +9,23 @@ are suited to dealing with these complications as the only information they
 require to generate a model is a set of observations (in this case historical stock market data).
 
 ## Example
-Training on and predicting stock prices between January 1st 2018 to August 22nd 2023 (the date that this example was ran on), predicting 5 days into the future. Typically the model will need to be trained on longer periods for more accurate results but this is purely to have a simple example.
-
-Input:
-```shell
-python stock_analysis.py -n AAPL -s 2018-01-01 -e 2023-08-22 -o /home/bw/Projects/HMMs_Stock_Market -p True -f 5 -m True
-```
-
-Output:
-```shell
-Using continuous Hidden Markov Models to predict stock prices for AAPL
-Training data period is from 2018-01-02 00:00:00 to 2019-12-17 00:00:00
-2020-12-06 17:50:11,202 __main__     INFO     >>> Extracting Features
-2020-12-06 17:50:11,203 __main__     INFO     Features extraction Completed <<<
-Predicting Close prices from 2019-12-18 00:00:00 to 2020-12-04 00:00:00
-100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████| 244/244 [07:54<00:00,  1.94s/it]
-All predictions saved. The Mean Squared Error for the 244 days considered is: 3.7785175769493202
-Predicting future Close prices from 2020-12-05 00:00:00 to 2020-12-09 00:00:00
-100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:09<00:00,  1.92s/it]
-The predicted stock prices for the next 5 days from 2020-12-05 are:  [122.99846938775511, 123.75152124114953, 124.50918361609536, 125.27148474027554,
-126.0384530141956]
-The full set of predictions has been saved, including the High, Low, Open and Close prices for 5 days in the future.
-```
-
-Bottom of Excel file (future predictions):
-
-|          Date         |   High   |    Low   |   Open   |   Close  |
-|:---------------------:|:--------:|:--------:|:--------:|:--------:|
-| 2020-12-03   00:00:00 | 123.78   | 122.21   | 123.52   | 122.94   |
-| 2020-12-04   00:00:00 | 122.86   | 121.52   | 122.6    | 122.25   |
-| 2020-12-05   00:00:00 | 123.6083 | 122.25   | 122.25   | 122.9985 |
-| 2020-12-06   00:00:00 | 124.3651 | 122.9985 | 122.9985 | 123.7515 |
-| 2020-12-07   00:00:00 | 125.1265 | 123.7515 | 123.7515 | 124.5092 |
-| 2020-12-08   00:00:00 | 125.8926 | 124.5092 | 124.5092 | 125.2715 |
-| 2020-12-09   00:00:00 | 126.6634 | 125.2715 | 125.2715 | 126.0385 |
-
-The full table contains all of the test data, in this case from 2019-12-18 to 2020-12-04 as well as the final 5 days in the future, 2020-12-04 to 2020-12-09.
-
 Plot:
 
 ![plot](images/AAPLresults_plot.png)
+
 ## Dependencies
-* Pandas_datareader - Allows one to download data directly from Yahoo finance
+* Pandas - Required for data processing
+* Pandas_datareader - Allows one to download data directly from Yahoo! Finance
 * NumPy - Required for fast manipulation of financial data (e.g. calculating fractional change)
 * Matplotlib - Required for visualisation of results
 * Hmmlearn - Open source package that allows for creation and fitting of HMM's 
-* Sklearn - Used to calculate metrics to score the results and split the data, will be removed in future to reduce dependency
+* Sklearn/Scikit-learn - Used to calculate metrics to score the results and split the data, will be removed in future to reduce dependency
 * Tqdm - Used to track progress whilst training
 * Argparse - Required for console inputs
+* YFinance - Needed for the updated data extraction from Yahoo! Finance
+* Tensorflow - Required for GPU acceleration; this is currently being properly implamented
+* Flask - Required for displaying the charts of your predictions through your browser
+* Livereload - Only recommended if you intend on working on the code... 
 
 ## Method
 Stock market data is downloaded via pandas_datareader and the data is split into training and testing datasets. The 
