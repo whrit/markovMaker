@@ -29,8 +29,14 @@ from livereload import Server
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
 import json
+
+# Declare global variables
+global_predicted_close_prices = None
+global_test_data = None
+
 # Suppress warning in hmmlearn
 warnings.filterwarnings("ignore")
+app = Flask(__name__)
 
 def cpugpu():
     import tensorflow as tf
@@ -135,6 +141,8 @@ class HMMStockPredictor:
 
         # Set days attribute
         self.days = len(test_data)
+        global global_test_data
+        global_test_data = self.test_data
 
     @staticmethod
     def _extract_features(data):
@@ -224,6 +232,9 @@ class HMMStockPredictor:
             predicted_close_prices.append(self.predict_close_price(day_index))
         self.predicted_close = predicted_close_prices
         self.predicted_close_prices = predicted_close_prices
+        global global_predicted_close_prices
+        global_predicted_close_prices = self.predicted_close_prices
+
         return predicted_close_prices
     
     def real_close_prices(self):
@@ -310,50 +321,68 @@ class HMMStockPredictor:
 
         self.predicted_close = predicted_close_prices
         self.predicted_close_prices = predicted_close_prices
-        return predicted_close_prices
+        return predicted_close_prices   
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/get_data', methods=['GET'])
+def get_data():
+    data_df = predictor.test_data
+
+    # Generate date index for predictions
+    last_date = pd.to_datetime(data_df.index[-1])
+    index = pd.date_range(last_date, periods=predictor.days_in_future + 1, freq="D")[1:]
+
+    # Calculate % change
+    y_pred = predictor.predict_close_prices_for_period()
+    y_pred_pct_change = (y_pred - y_pred[0]) / y_pred[0] * 100
+
+    # Calculate actual prices using % changes
+    actual_prices = []
+    last_actual_close = data_df["Close"].iloc[-1]
+    for pct_change in y_pred_pct_change:
+        actual_close = last_actual_close * (1 + (pct_change/100))
+        actual_prices.append(actual_close)
+
+    # Convert the dates in predicted_data to the desired format
+    formatted_dates = [date.strftime('%Y-%m-%d') for date in index]
+
+    return jsonify({
+        'actual_data': {
+            'dates': [date.strftime('%Y-%m-%d') for date in data_df.index.tolist()],
+            'values': data_df["Close"].tolist()
+        },
+        'predicted_data': {
+            'dates': formatted_dates,
+            'values': actual_prices
+        }
+    })
+
 
 server_started = False
 log = logging.getLogger(__name__)
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-def predict_future_data(self):
+def start_server():
     global server_started
-
-    app = Flask(__name__)
-
-    @app.route('/get_data', methods=['GET'])  # Renamed from '/predictions'
-    def get_data():  # Renamed the function for clarity
-        # Convert the dates in predicted_data to the desired format
-        formatted_dates = [date.strftime('%Y-%m-%d') for date in self.predicted_close_prices["Date"].tolist()]
-
-        return jsonify({
-            'actual_data': {
-                'dates': self.test_data["Date"].tolist(),
-                'values': self.test_data["Close"].tolist()
-            },
-            'predicted_data': {
-                'dates': formatted_dates,
-                'values': self.predicted_close_prices["Predicted Close"].tolist()
-            },
-        })
-
-    if __name__ == "__main__":
-        if not server_started:
-            if os.environ.get("USE_LIVERELOAD", "False") == "True":
-                try:
-                    server = Server(app.wsgi_app)
-                    server.watch('templates/*.*')  # Watch for changes in the 'templates' directory
-                    server.watch('static/*.*')     # Watch for changes in the 'static' directory
-                    server.serve(port=5000, debug=False)
-                except Exception as e:
-                    logging.error("Error with livereload: %s", e)
-            else:
-                try:
-                    app.run(port=5000, debug=True, use_reloader=False)
-                except Exception as e:
-                    logging.error("Error starting the Flask app: %s", e)
-            server_started = True
+    
+    if not server_started:
+        if os.environ.get("USE_LIVERELOAD", "False") == "True":
+            try:
+                server = Server(app.wsgi_app)
+                server.watch('templates/*.*')
+                server.watch('static/*.*')
+                server.serve(port=5000, debug=False)
+            except Exception as e:
+                logging.error("Error with livereload: %s", e)
+        else:
+            try:
+                app.run(port=5000, debug=True, use_reloader=False)
+            except Exception as e:
+                logging.error("Error starting the Flask app: %s", e)
+        server_started = True
 
 def plot_results(df, out_dir, company_name):
     plt.figure(figsize=(14, 7))
@@ -553,7 +582,9 @@ def main():
 
     use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir)
 
-
 if __name__ == "__main__":
-    # Model prediction scoring is saved in the same directory as the images that are tested.
+    # Handle arguments and run predictions
     main()
+    
+    # Start the Flask server
+    start_server()

@@ -3,7 +3,7 @@ import sys
 import pandas as pd
 
 sys.path.append("../../")
-from src import stock_analysis
+from markovMaker import stock_analysis
 
 
 @pytest.mark.small

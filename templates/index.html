@@ -123,6 +123,9 @@
 </head>
 
 <body>
+    
+    <!-- Loading Indicator -->
+    <div id="loading" style="text-align: center; margin-top: 20px;">Loading data...</div>
 
     <div id="chart"></div>
 
@@ -147,6 +150,11 @@
     <!-- Theme Toggle Button -->
     <div class="theme-toggle">
         <button class="toggle-button" onclick="toggleTheme()">Switch to Light Theme</button>
+    </div>
+
+    <!-- Refresh Button -->
+    <div style="text-align: center; margin-top: 10px;">
+        <button onclick="fetchData()">Refresh Data</button>
     </div>
 
 <script>
@@ -281,14 +289,21 @@
         areaSeries.applyOptions(themesData[theme].series);
     }
 
-    fetch('/get_data')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();
-    })
-    .then(data => {
+    function fetchData() {
+        document.getElementById('loading').innerText = 'Loading data...'; // Show loading indicator
+
+        fetch('/get_data')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.actual_data || !data.predicted_data) {
+                throw new Error('Data format is not as expected');
+            }
+
         const actualData = data.actual_data.dates.map((date, idx) => ({
             time: new Date(date).getTime() / 1000, // Convert to UNIX timestamp
             value: data.actual_data.values[idx]
@@ -320,10 +335,15 @@
             
         // Set the initial theme to Dark
         syncToTheme('Dark');
-    })
-    .catch(error => {
-        console.error('There was a problem with the fetch operation:', error.message);
-    });
+            document.getElementById('loading').innerText = ''; // Hide loading indicator
+        })
+        .catch(error => {
+            console.error('There was a problem with the fetch operation:', error.message);
+            document.getElementById('loading').innerText = 'Failed to load data. Please try again later.';
+        });
+    }
+
+    fetchData(); // Initial data fetch
     // Zoom function
     function zoom(factor) {
         const timeScale = chart.timeScale();
@@ -341,3 +361,5 @@
     }
 
 </script>
+</body>
+</html>
