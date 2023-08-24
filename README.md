@@ -15,11 +15,11 @@ are suited to dealing with these complications as the only information they
 require to generate a model is a set of observations (in this case historical stock market data).
 
 ## Example
-Training on and predicting stock prices between January 1st 2018 to December 5th 2020 (the date that this example was ran on), predicting 5 days into the future. Typically the model will need to be trained on longer periods for more accurate results but this is purely to have a simple example.
+Training on and predicting stock prices between January 1st 2018 to August 22nd 2023 (the date that this example was ran on), predicting 5 days into the future. Typically the model will need to be trained on longer periods for more accurate results but this is purely to have a simple example.
 
 Input:
 ```shell
-python stock_analysis.py -n AAPL -s 2018-01-01 -e 2020-12-05 -o C:\Users\Jay\Test -p True -f 5 -m True
+python stock_analysis.py -n AAPL -s 2018-01-01 -e 2023-08-22 -o /home/bw/Projects/HMMs_Stock_Market -p True -f 5 -m True
 ```
 
 Output:
@@ -86,7 +86,6 @@ pip install -r requirements.txt
 Within the src directory:
 ```shell
 python stock_analysis.py [-n XXXX] [-s yyyy-mm-dd] [-e yyyy-mm-dd] [-o dir] [-p T/F] [-f int] [-m T/F]
-python stock_analysis.py -n AAPL -s 2018-01-01 -e 2020-12-05 -o C:\Users\Jay\Test -p True -f 5 -m True
 python stock_analysis.py -n AAPL -s 2018-01-01 -e 2023-08-22 -o /home/bw/Projects/HMMs_Stock_Market -p True -f 5 -m True
 
 ```
