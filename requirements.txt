@@ -1,7 +1,12 @@
 pandas
+numpy
 pandas-datareader
 matplotlib
 hmmlearn
+scikit-learn
 tqdm
-openpyxl
-pytest
+argparse
+yfinance
+tensorflow
+Flask
+livereload
