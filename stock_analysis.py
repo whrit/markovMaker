@@ -11,31 +11,29 @@ from pandas_datareader import data
 import matplotlib.pyplot as plt
 from hmmlearn.hmm import GaussianHMM
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_percentage_error
 from tqdm import tqdm
 import argparse
 import sys
 import os
 import yfinance as yf
-from datetime import timedelta
-import logging
+from datetime import timedelta, datetime
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-from sklearn.metrics import mean_absolute_percentage_error
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, g
 from livereload import Server
-from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
 import json
 
-# Declare global variables
-global_predicted_close_prices = None
-global_test_data = None
+# Setting up logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Suppress warning in hmmlearn
 warnings.filterwarnings("ignore")
+
 app = Flask(__name__)
 
 def cpugpu():
@@ -71,6 +69,13 @@ def cpugpu():
         print("No GPU devices found, TensorFlow will use CPU.")
 
 class HMMStockPredictor:
+    _instance = None
+    _model_trained = False
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(HMMStockPredictor, cls).__new__(cls)
+        return cls._instance
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     print("TensorFlow version:", tf.__version__)
     cpugpu()
@@ -107,7 +112,7 @@ class HMMStockPredictor:
             print("NaN values detected in the data!")
             # Fill NaN values with the mean of the column
             self.test_data.fillna(self.test_data.mean(), inplace=True)
-
+    
     def _init_logger(self):
         self._logger = logging.getLogger(__name__)
         handler = logging.StreamHandler()
@@ -167,6 +172,7 @@ class HMMStockPredictor:
         self._logger.info("Features extraction Completed <<<")
         # Fit the HMM using the fit feature of hmmlearn
         self.hmm.fit(observations)
+        self._model_trained = True
 
     def _compute_all_possible_outcomes(
         self, n_intervals_frac_change, n_intervals_frac_high, n_intervals_frac_low
@@ -221,6 +227,8 @@ class HMMStockPredictor:
         Predict close prices for the testing period.
         :return: List object of predicted close prices
         """
+        if not self._model_trained:
+            self.fit()
         predicted_close_prices = []
         print(
             "Predicting Close prices from "
@@ -323,20 +331,43 @@ class HMMStockPredictor:
         self.predicted_close_prices = predicted_close_prices
         return predicted_close_prices   
 
+# Global variables to store parsed arguments
+company_name = None
+start = None
+end = None
+future = None
+metrics = None
+plot = None
+out_dir = None
+
+@app.before_request
+def before_request():
+    """
+    This function will run before each request to initialize the HMMStockPredictor object.
+    """
+    global company_name, start, end, future
+    g.predictor = HMMStockPredictor(
+        company=company_name,
+        start_date=start,
+        end_date=end,
+        future_days=future
+    )
+    g.predictor.fit()  # Ensure the model is fitted before making predictions
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/get_data', methods=['GET'])
 def get_data():
-    data_df = predictor.test_data
+    data_df = g.predictor.test_data  # Access predictor from g object
 
     # Generate date index for predictions
     last_date = pd.to_datetime(data_df.index[-1])
-    index = pd.date_range(last_date, periods=predictor.days_in_future + 1, freq="D")[1:]
+    index = pd.date_range(last_date, periods=g.predictor.days_in_future + 1, freq="D")[1:]
 
     # Calculate % change
-    y_pred = predictor.predict_close_prices_for_period()
+    y_pred = g.predictor.predict_close_prices_for_period()
     y_pred_pct_change = (y_pred - y_pred[0]) / y_pred[0] * 100
 
     # Calculate actual prices using % changes
@@ -359,7 +390,6 @@ def get_data():
             'values': actual_prices
         }
     })
-
 
 server_started = False
 log = logging.getLogger(__name__)
@@ -492,6 +522,8 @@ def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir
         )
 
 def main():
+    global company_name, start, end, future, metrics, plot, out_dir
+
     # Set up arg_parser to handle inputs
     arg_parser = argparse.ArgumentParser()
 
@@ -565,20 +597,7 @@ def main():
     future = args.future
     metrics = args.metrics
     plot = args.plot
-
-    # Handle empty input case
-    if not metrics and future is None:
-        print(
-            "No outputs selected as both historical predictions and future predictions are empty/None. Please repeat "
-            "your inputs with a boolean value for -m, or an integer value for -f, or both."
-        )
-        sys.exit()
-
-    # Use the current working directory for saving if there is no input
-    if args.out_dir is None:
-        out_dir = os.getcwd()
-    else:
-        out_dir = args.out_dir
+    out_dir = args.out_dir if args.out_dir else os.getcwd()
 
     use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir)
 
