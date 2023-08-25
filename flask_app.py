@@ -11,6 +11,16 @@ from stock_analysis import HMMStockPredictor, company_name, start, end, future
 
 app = Flask(__name__)
 
+import os
+
+def kill_process_on_port(port):
+    """Kill the process running on the given port."""
+    try:
+        # Find the process using the port and kill it
+        os.system(f"fuser -k {port}/tcp")
+    except Exception as e:
+        print(f"Error killing process on port {port}: {e}")
+
 @app.before_request
 def before_request():
     print(f"Company Name: {company_name}")
@@ -80,6 +90,9 @@ logging.basicConfig(level=logging.INFO)
 
 def start_server():
     global server_started
+    
+    # Kill any processes using port 5000
+    kill_process_on_port(5000)
     
     if not server_started:
         if os.environ.get("USE_LIVERELOAD", "False") == "True":
