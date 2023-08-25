@@ -50,7 +50,7 @@ pip install -r requirements.txt
 Within the src directory:
 ```shell
 python stock_analysis.py [-n XXXX] [-s yyyy-mm-dd] [-e yyyy-mm-dd] [-o dir] [-p T/F] [-f int] [-m T/F]
-python stock_analysis.py -n AAPL -s 2018-01-01 -e 2023-08-22 -o /home/bw/Projects/HMMs_Stock_Market -p True -f 5 -m True
+python stock_analysis.py -n AAPL -s 2018-01-01 -e 2023-08-22 -o /home/bw/Projects/markovMaker -p True -f 5 -m True
 
 ```
 The -n input represents a given stock name, -s is the start date of the period considered, -e is the end date of the period considered, 

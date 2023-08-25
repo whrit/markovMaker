@@ -300,6 +300,7 @@
             return response.json();
         })
         .then(data => {
+            console.log(data);  // Log the data to see its structure
             if (!data.actual_data || !data.predicted_data) {
                 throw new Error('Data format is not as expected');
             }

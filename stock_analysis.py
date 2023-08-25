@@ -22,10 +22,10 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from flask import Flask, jsonify, render_template, g
 from livereload import Server
 from sklearn.preprocessing import MinMaxScaler
 import json
+import subprocess
 
 # Setting up logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -33,8 +33,6 @@ logger = logging.getLogger(__name__)
 
 # Suppress warning in hmmlearn
 warnings.filterwarnings("ignore")
-
-app = Flask(__name__)
 
 def cpugpu():
     import tensorflow as tf
@@ -78,7 +76,6 @@ class HMMStockPredictor:
         return cls._instance
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     print("TensorFlow version:", tf.__version__)
-    cpugpu()
 
     def __init__(
         self,
@@ -126,12 +123,10 @@ class HMMStockPredictor:
     def _split_train_test_data(self, test_size):
         """Downloads data and splits it into training and testing datasets."""
         # Use yfinance to load the required financial data.
-        try:
-            used_data = yf.download(self.company, start=self.start_date, end=self.end_date)
-        except Exception as e:
-            print(f"Error fetching data: {e}")
+        used_data = yf.download(self.company, start=self.start_date, end=self.end_date)
+        if used_data.empty:
+            print(f"Failed to fetch data for {self.company} from {self.start_date} to {self.end_date}.")
             sys.exit()
-
 
         # Do not shuffle the data as it is a time series
         _train_data, test_data = train_test_split(
@@ -139,10 +134,11 @@ class HMMStockPredictor:
         )
         self.train_data = _train_data
         self.test_data = test_data
+        self.handle_nan_values()
 
-        # Drop the columns that aren't used
-        self.train_data = self.train_data.drop(["Volume", "Adj Close"], axis=1)
-        self.test_data = self.test_data.drop(["Volume", "Adj Close"], axis=1)
+        # Vectorized operation to drop columns
+        self.train_data.drop(columns=["Volume", "Adj Close"], inplace=True)
+        self.test_data.drop(columns=["Volume", "Adj Close"], inplace=True)
 
         # Set days attribute
         self.days = len(test_data)
@@ -151,18 +147,10 @@ class HMMStockPredictor:
 
     @staticmethod
     def _extract_features(data):
-        """Extract the features - open, close, high, low price - from the Yahooo finance generated dataframe."""
-        open_price = np.array(data["Open"])
-        close_price = np.array(data["Close"])
-        high_price = np.array(data["High"])
-        low_price = np.array(data["Low"])
-
-        # We compute the fractional change in high,low and close prices to use as our set of observations
-        frac_change = (close_price - open_price) / open_price
-        frac_high = (high_price - open_price) / open_price
-        frac_low = (open_price - low_price) / open_price
-
-        # Put the observations into one array
+        """Extract the features using vectorized operations."""
+        frac_change = (data["Close"] - data["Open"]) / data["Open"]
+        frac_high = (data["High"] - data["Open"]) / data["Open"]
+        frac_low = (data["Open"] - data["Low"]) / data["Open"]
         return np.column_stack((frac_change, frac_high, frac_low))
 
     def fit(self):
@@ -340,80 +328,6 @@ metrics = None
 plot = None
 out_dir = None
 
-@app.before_request
-def before_request():
-    """
-    This function will run before each request to initialize the HMMStockPredictor object.
-    """
-    global company_name, start, end, future
-    g.predictor = HMMStockPredictor(
-        company=company_name,
-        start_date=start,
-        end_date=end,
-        future_days=future
-    )
-    g.predictor.fit()  # Ensure the model is fitted before making predictions
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/get_data', methods=['GET'])
-def get_data():
-    data_df = g.predictor.test_data  # Access predictor from g object
-
-    # Generate date index for predictions
-    last_date = pd.to_datetime(data_df.index[-1])
-    index = pd.date_range(last_date, periods=g.predictor.days_in_future + 1, freq="D")[1:]
-
-    # Calculate % change
-    y_pred = g.predictor.predict_close_prices_for_period()
-    y_pred_pct_change = (y_pred - y_pred[0]) / y_pred[0] * 100
-
-    # Calculate actual prices using % changes
-    actual_prices = []
-    last_actual_close = data_df["Close"].iloc[-1]
-    for pct_change in y_pred_pct_change:
-        actual_close = last_actual_close * (1 + (pct_change/100))
-        actual_prices.append(actual_close)
-
-    # Convert the dates in predicted_data to the desired format
-    formatted_dates = [date.strftime('%Y-%m-%d') for date in index]
-
-    return jsonify({
-        'actual_data': {
-            'dates': [date.strftime('%Y-%m-%d') for date in data_df.index.tolist()],
-            'values': data_df["Close"].tolist()
-        },
-        'predicted_data': {
-            'dates': formatted_dates,
-            'values': actual_prices
-        }
-    })
-
-server_started = False
-log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
-def start_server():
-    global server_started
-    
-    if not server_started:
-        if os.environ.get("USE_LIVERELOAD", "False") == "True":
-            try:
-                server = Server(app.wsgi_app)
-                server.watch('templates/*.*')
-                server.watch('static/*.*')
-                server.serve(port=5000, debug=False)
-            except Exception as e:
-                logging.error("Error with livereload: %s", e)
-        else:
-            try:
-                app.run(port=5000, debug=True, use_reloader=False)
-            except Exception as e:
-                logging.error("Error starting the Flask app: %s", e)
-        server_started = True
-
 def plot_results(df, out_dir, company_name):
     plt.figure(figsize=(14, 7))
     plt.plot(df['Actual_Close'], label='Actual Close', color='blue')
@@ -454,7 +368,6 @@ def calc_mse(input_df):
 def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir):
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     print("TensorFlow version:", tf.__version__)
-    cpugpu()
 
     # Correct incorrect inputs. Inputs should be of the form XXXX, but handle cases when users input 'XXXX'
     company_name = company_name.strip("'").strip('"')
@@ -599,11 +512,17 @@ def main():
     plot = args.plot
     out_dir = args.out_dir if args.out_dir else os.getcwd()
 
+    cpugpu()
+
     use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir)
+
+def start_flask_server():
+    # Assuming flask_app.py is in the same directory as stock_analysis.py
+    subprocess.Popen(["python", "flask_app.py"])
 
 if __name__ == "__main__":
     # Handle arguments and run predictions
     main()
     
-    # Start the Flask server
-    start_server()
+    # Start the Flask server after predictions are done
+    start_flask_server()
