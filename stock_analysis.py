@@ -1,7 +1,3 @@
-"""
-Usage:
-stock_analysis.py --n=<stock_name> --s<start_date> --e<end_date> --o<out_directory> --p<plot> --f<future> --m<metric>
-"""
 import warnings
 import logging
 import itertools
@@ -142,8 +138,6 @@ class HMMStockPredictor:
 
         # Set days attribute
         self.days = len(test_data)
-        global global_test_data
-        global_test_data = self.test_data
 
     @staticmethod
     def _extract_features(data):
@@ -228,8 +222,6 @@ class HMMStockPredictor:
             predicted_close_prices.append(self.predict_close_price(day_index))
         self.predicted_close = predicted_close_prices
         self.predicted_close_prices = predicted_close_prices
-        global global_predicted_close_prices
-        global_predicted_close_prices = self.predicted_close_prices
 
         return predicted_close_prices
     
@@ -318,15 +310,6 @@ class HMMStockPredictor:
         self.predicted_close = predicted_close_prices
         self.predicted_close_prices = predicted_close_prices
         return predicted_close_prices   
-
-# Global variables to store parsed arguments
-company_name = None
-start = None
-end = None
-future = None
-metrics = None
-plot = None
-out_dir = None
 
 def plot_results(df, out_dir, company_name):
     plt.figure(figsize=(14, 7))
@@ -433,10 +416,10 @@ def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir
             + str(future)
             + " days in the future."
         )
+    # Return the required data instead of setting global variables
+    return stock_predictor.test_data, stock_predictor.predicted_close_prices
 
 def main():
-    global company_name, start, end, future, metrics, plot, out_dir
-
     # Set up arg_parser to handle inputs
     arg_parser = argparse.ArgumentParser()
 
@@ -514,15 +497,20 @@ def main():
 
     cpugpu()
 
-    use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir)
+    # Get the required data from the use_stock_predictor function
+    test_data, predicted_close_prices = use_stock_predictor(args.stock_name, start, end, future, metrics, plot, out_dir)
 
-def start_flask_server():
-    # Assuming flask_app.py is in the same directory as stock_analysis.py
-    subprocess.Popen(["python", "flask_app.py"])
+    # Pass the required data to the start_server function
+    from flask_app import start_server
+    start_server(
+        company_name=company_name,
+        test_data=test_data,
+        predicted_close_prices=predicted_close_prices,
+        start_date=start,
+        end_date=end,
+        future_days=future
+    )
 
 if __name__ == "__main__":
     # Handle arguments and run predictions
     main()
-    
-    # Start the Flask server after predictions are done
-    start_flask_server()
