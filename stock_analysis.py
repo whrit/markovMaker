@@ -22,10 +22,13 @@ from livereload import Server
 from sklearn.preprocessing import MinMaxScaler
 import json
 import subprocess
+from flask import Flask, jsonify, render_template, request
+from livereload import Server
 
 # Setting up logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+server_started = False
 
 # Suppress warning in hmmlearn
 warnings.filterwarnings("ignore")
@@ -72,6 +75,11 @@ class HMMStockPredictor:
         return cls._instance
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     print("TensorFlow version:", tf.__version__)
+
+    def ensure_fitted(self):
+        if not hasattr(self.hmm, "startprob_"):
+            self._logger.info("Model is not fitted. Fitting now...")
+            self.fit()
 
     def __init__(
         self,
@@ -205,6 +213,7 @@ class HMMStockPredictor:
         return open_price * (1 + predicted_frac_change)
 
     def predict_close_prices_for_period(self):
+        self.ensure_fitted()         
         """
         Predict close prices for the testing period.
         :return: List object of predicted close prices
@@ -282,6 +291,7 @@ class HMMStockPredictor:
         return predicted_close_price
 
     def predict_close_prices_for_future(self):
+        self.ensure_fitted()  # Ensure the model is fitted
         """
         Calls the "predict_close_price_fut_days" function for each day in the future to predict future close prices.
         """
@@ -410,14 +420,91 @@ def use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir
         out_final = (
             f"{out_dir}/{company_name}_HMM_Predictions_{future}_days_in_future.xlsx"
         )
+
+            # Save predictions and % change in a CSV file
+        predictions = pd.DataFrame(
+            {
+                "Date": index,
+                "Predicted Close": future_pred_close,
+            }
+        )
+        predictions.to_csv("predictions.csv", index=False)                                          
         stock_predictor.test_data.to_excel(out_final)  # Requires openpyxl installed
         print(
             "The full set of predictions has been saved, including the High, Low, Open and Close prices for "
             + str(future)
             + " days in the future."
         )
+
+    # Find the rows with the lowest and highest predicted close
+    min_close_row = predictions.iloc[predictions["Predicted Close"].idxmin()]
+    max_close_row = predictions.iloc[predictions["Predicted Close"].idxmax()]
+
+    # Print the rows with the lowest and highest predicted close
+    print(f"Highest predicted close:\n{max_close_row}\n")
+    print(f"Lowest predicted close:\n{min_close_row}\n")
+
     # Return the required data instead of setting global variables
     return stock_predictor.test_data, stock_predictor.predicted_close_prices
+
+def start_flask_server():
+    app.run(port=5000, debug=True, use_reloader=False)
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/get_data', methods=['GET'])
+def get_data(company_name, start, end, future, metrics,out_dir):
+    global server_started
+    # Call the use_stock_predictor function to get the predicted and actual stock prices
+    test_data, predicted_close_prices = use_stock_predictor(
+        company_name=company_name,
+        start=start,
+        end=end,
+        future=future,
+        metrics=metrics,
+        plot=False,
+        out_dir=out_dir
+    )
+
+    # Convert the dates to the desired format
+    formatted_dates = []
+    for date in test_data.index.tolist():
+        date_str = date.strftime('%a, %d %b %Y %H:%M:%S')
+        date_obj = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S')
+        formatted_date = date_obj.strftime('%Y-%m-%d')
+        formatted_dates.append(formatted_date)
+
+    return jsonify({
+        'actual_data': {
+            'dates': formatted_dates,
+            'values': test_data["Close"].tolist()
+        },
+        'predicted_data': {
+            'dates': formatted_dates,
+            'values': predicted_close_prices
+        }
+    })
+
+if __name__ == "__main__":
+    if not server_started:
+        if os.environ.get("USE_LIVERELOAD", "False") == "True":
+            try:
+                server = Server(app.wsgi_app)
+                server.watch('templates/*.*')  # Watch for changes in the 'templates' directory
+                server.watch('static/*.*')     # Watch for changes in the 'static' directory
+                server.serve(port=5000, debug=False)
+            except Exception as e:
+                logging.error("Error with livereload: %s", e)
+        else:
+            try:
+                app.run(port=5000, debug=True, use_reloader=False)
+            except Exception as e:
+                logging.error("Error starting the Flask app: %s", e)
+        server_started = True
 
 def main():
     # Set up arg_parser to handle inputs
@@ -493,24 +580,24 @@ def main():
     future = args.future
     metrics = args.metrics
     plot = args.plot
-    out_dir = args.out_dir if args.out_dir else os.getcwd()
 
-    cpugpu()
+    # Handle empty input case
+    if not metrics and future is None:
+        print(
+            "No outputs selected as both historical predictions and future predictions are empty/None. Please repeat "
+            "your inputs with a boolean value for -m, or an integer value for -f, or both."
+        )
+        sys.exit()
 
-    # Get the required data from the use_stock_predictor function
-    test_data, predicted_close_prices = use_stock_predictor(args.stock_name, start, end, future, metrics, plot, out_dir)
+    # Use the current working directory for saving if there is no input
+    if args.out_dir is None:
+        out_dir = os.getcwd()
+    else:
+        out_dir = args.out_dir
 
-    # Pass the required data to the start_server function
-    from flask_app import start_server
-    start_server(
-        company_name=company_name,
-        test_data=test_data,
-        predicted_close_prices=predicted_close_prices,
-        start_date=start,
-        end_date=end,
-        future_days=future
-    )
+    use_stock_predictor(company_name, start, end, future, metrics, plot, out_dir)
 
 if __name__ == "__main__":
+    start_flask_server()
     # Handle arguments and run predictions
     main()
