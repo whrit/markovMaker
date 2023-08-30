@@ -292,9 +292,7 @@
     function fetchData() {
         document.getElementById('loading').innerText = 'Loading data...'; // Show loading indicator
 
-        fetch('/data', {
-            method: 'GET'  // or 'POST', 'PUT', etc.
-        })
+        fetch('/data')  // Updated this line
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
